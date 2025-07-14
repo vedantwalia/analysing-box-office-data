@@ -1,51 +1,63 @@
 import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import linear_kernel
+from sklearn.metrics.pairwise import cosine_similarity
 
-st.set_page_config(page_title="TMDb Movie Recommender", layout="wide")
-st.title("🎬 TMDb Movie Recommender & Explorer")
-
-st.write("📥 Loading data...")
+# Loading the dataset and using caching to improve performance
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data/TMDB_movie_dataset_v11.csv")
+    df = pd.read_csv("data/TMDB_movie_dataset_v11.csv")  # change to your actual file
+    df['combined_features'] = (
+        df['genres'].fillna('') + ' ' +
+        df['overview'].fillna('') + ' ' +
+        df['tagline'].fillna('')
+    )
     return df
 
-df = load_data()
-st.success("✅ Data loaded successfully!")
+movies_df = load_data()
 
-st.write("🧹 Preprocessing...")
-df['overview'] = df['overview'].fillna('')
-df['genres'] = df['genres'].fillna('')
-df['combined_features'] = df['overview'].astype(str) + " " + df['genres'].astype(str)
-df['combined_features'] = df['combined_features'].fillna('').astype(str)
-st.success("✅ Preprocessing complete.")
+def recommend_by_genre(title, genre, top_n=5):
+    df = movies_df[movies_df['genres'].str.contains(genre, case=False, na=False)].copy()
+    df = df.reset_index(drop=True)
 
-st.write("🔎 Vectorizing...")
-tfidf = TfidfVectorizer(stop_words='english', max_features=10000)
-tfidf_matrix = tfidf.fit_transform(df['combined_features'])
-st.success("✅ Vectorization complete.")
+    tfidf = TfidfVectorizer(stop_words='english', max_features=10000)
+    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
 
-# Create reverse index
-indices = pd.Series(df.index, index=df['title']).drop_duplicates()
-
-def recommend(title, num_recommendations=5):
+    indices = pd.Series(df.index, index=df['title']).drop_duplicates()
     idx = indices.get(title)
     if idx is None:
-        return []
-    sim_scores = linear_kernel(tfidf_matrix[idx], tfidf_matrix).flatten()
-    sim_indices = sim_scores.argsort()[-(num_recommendations+1):-1][::-1]
-    return df[['title', 'vote_average', 'release_date']].iloc[sim_indices]
+        return pd.DataFrame(columns=['title', 'score'])
 
-st.subheader("🔍 Movie-Based Recommendations")
+    sim_scores = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
+    sim_indices = sim_scores.argsort()[-top_n-1:-1][::-1]
+    sim_scores = sim_scores[sim_indices]
 
-selected_movie = st.selectbox("🎥 Choose a movie:", sorted(df['title'].dropna().unique()))
+    return df.iloc[sim_indices][['title']].assign(score=sim_scores)
 
-if selected_movie:
-    st.write(f"🎯 Recommendations based on **{selected_movie}**:")
-    recs = recommend(selected_movie)
-    if len(recs) > 0:
-        st.table(recs)
-    else:
+#-------------------------Streamlit UI-------------------------
+
+st.set_page_config(page_title="🎬 Genre Movie Recommender", layout="centered")
+
+st.title("🎥 Genre-Based Movie Recommender")
+st.markdown("Get content-based movie recommendations from a selected genre.")
+
+# Genre selection
+available_genres = sorted(set(g for sub in movies_df['genres'].dropna().str.split(',') for g in sub))
+selected_genre = st.selectbox("Select a genre", available_genres)
+
+# Movie selection
+genre_movies = movies_df[movies_df['genres'].str.contains(selected_genre, case=False, na=False)]
+movie_list = genre_movies['title'].dropna().unique()
+selected_movie = st.selectbox("Choose a movie", sorted(movie_list))
+
+# Number of recommendations
+top_n = st.slider("Number of recommendations", 3, 15, 5)
+
+# Recommend button
+if st.button("Recommend"):
+    recommendations = recommend_by_genre(selected_movie, selected_genre, top_n)
+    if recommendations.empty:
         st.warning("No recommendations found.")
+    else:
+        st.subheader("Recommended Movies:")
+        st.dataframe(recommendations.reset_index(drop=True))
