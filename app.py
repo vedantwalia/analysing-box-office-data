@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import rapidfuzz 
 
 # Loading the dataset and using caching to improve performance
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data/TMDB_movie_dataset_v11.csv")  # change to your actual file
+    df = pd.read_csv("data/TMDB_movie_dataset_v11.csv")
     df['combined_features'] = (
         df['genres'].fillna('') + ' ' +
         df['overview'].fillna('') + ' ' +
@@ -47,14 +48,32 @@ selected_genre = st.selectbox("Select a genre", available_genres)
 
 # Movie selection
 genre_movies = movies_df[movies_df['genres'].str.contains(selected_genre, case=False, na=False)]
-movie_list = genre_movies['title'].dropna().unique()
-selected_movie = st.selectbox("Choose a movie", sorted(movie_list))
+#movie_list = genre_movies['title'].dropna().unique()
+#selected_movie = st.selectbox("Choose a movie", sorted(movie_list))
+
+movie_list = genre_movies['title'].dropna().unique().tolist()
+user_input = st.text_input("🎬 Type a movie name", "")
+
+# Fuzzy matching to find the closest movie title
+
+if user_input:
+    matches =rapidfuzz.process.extract(user_input, movie_list, limit=10)
+
+    if matches:
+        selected_movie = matches[0][0]
+        st.markdown(f"🧠 Best match: **{selected_movie}**  _(score: {matches[0][1]:.1f})_")
+
+        st.markdown("💡 Other suggestions:")
+        for title, score, _ in matches[1:6]:
+            st.markdown(f"- {title} _(score: {score:.1f})_")
+    else:
+        st.warning("❌ No close matches found.")
 
 # Number of recommendations
 top_n = st.slider("Number of recommendations", 3, 15, 5)
 
 # Recommend button
-if st.button("Recommend"):
+if st.button("Recommend") and selected_movie:
     recommendations = recommend_by_genre(selected_movie, selected_genre, top_n)
     if recommendations.empty:
         st.warning("No recommendations found.")
