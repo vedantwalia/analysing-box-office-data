@@ -3,6 +3,8 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import rapidfuzz 
+import requests
+from config import API_KEY, BASE_URL
 
 # Loading the dataset and using caching to improve performance
 @st.cache_data
@@ -34,6 +36,28 @@ def recommend_by_genre(title, genre, top_n=5):
     sim_scores = sim_scores[sim_indices]
 
     return df.iloc[sim_indices][['title']].assign(score=sim_scores)
+
+def get_movie_poster(title):
+    #Fetches the movie poster URL using TMDB API
+    search_url = "https://api.themoviedb.org/3/search/movie"
+    params = {
+        "api_key": API_KEY,
+        "query": title
+    }
+
+    response = requests.get(search_url, params=params)
+    data = response.json()
+
+    if data.get("results"):
+        result = data["results"][0]
+        poster_path = result.get("poster_path")
+        vote = result.get("vote_average", "N/A")
+        overview = result.get("overview", "No overview available")
+
+        poster_url = f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else None
+        return poster_url, vote, overview
+
+    return None, "N/A", "No overview available"
 
 #-------------------------Streamlit UI-------------------------
 
@@ -75,8 +99,25 @@ top_n = st.slider("Number of recommendations", 3, 15, 5)
 # Recommend button
 if st.button("Recommend") and selected_movie:
     recommendations = recommend_by_genre(selected_movie, selected_genre, top_n)
+
     if recommendations.empty:
         st.warning("No recommendations found.")
     else:
-        st.subheader("Recommended Movies:")
-        st.dataframe(recommendations.reset_index(drop=True))
+        st.subheader("🎬 Recommended Movies")
+
+        for _, row in recommendations.iterrows():
+            title = row['title']
+            poster_url, vote, overview = get_movie_poster(title)
+
+            with st.container():
+                cols = st.columns([1, 4])
+                with cols[0]:
+                    if poster_url:
+                        st.image(poster_url, width=120)
+                    else:
+                        st.markdown("❌ No image")
+
+                with cols[1]:
+                    st.markdown(f"### {title}")
+                    st.markdown(f"⭐ **Rating**: {vote}")
+                    st.markdown(f"📖 *{overview[:250]}...*")  # Limit to 250 chars
