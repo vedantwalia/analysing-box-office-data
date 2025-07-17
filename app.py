@@ -64,7 +64,7 @@ def get_movie_poster(title):
         vote = result.get("vote_average", "N/A")
         overview = result.get("overview", "No overview available")
 
-        poster_url = f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else None
+        poster_url = f"{BASE_URL}{poster_path}" if poster_path else None
         return poster_url, vote, overview
 
     return None, "N/A", "No overview available"
