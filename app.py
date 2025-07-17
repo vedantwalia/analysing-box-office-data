@@ -19,12 +19,17 @@ def load_data():
 
 movies_df = load_data()
 
+@st.cache_resource
+def compute_tfidf_matrix(df):
+    tfidf = TfidfVectorizer(stop_words='english', max_features=10000)
+    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
+    return tfidf, tfidf_matrix
+
 def recommend_by_genre(title, genre, top_n=5):
     df = movies_df[movies_df['genres'].str.contains(genre, case=False, na=False)].copy()
     df = df.reset_index(drop=True)
 
-    tfidf = TfidfVectorizer(stop_words='english', max_features=10000)
-    tfidf_matrix = tfidf.fit_transform(df['combined_features'])
+    tfidf, tfidf_matrix = compute_tfidf_matrix(df)
 
     indices = pd.Series(df.index, index=df['title']).drop_duplicates()
     idx = indices.get(title)
@@ -37,6 +42,11 @@ def recommend_by_genre(title, genre, top_n=5):
 
     return df.iloc[sim_indices][['title']].assign(score=sim_scores)
 
+@st.cache_data
+def cached_recommendations(title, genre, top_n):
+    return recommend_by_genre(title, genre, top_n)
+
+@st.cache_data
 def get_movie_poster(title):
     #Fetches the movie poster URL using TMDB API
     search_url = "https://api.themoviedb.org/3/search/movie"
@@ -59,6 +69,10 @@ def get_movie_poster(title):
 
     return None, "N/A", "No overview available"
 
+@st.cache_data
+def get_available_genres():
+    return sorted(set(g for sub in movies_df['genres'].dropna().str.split(',') for g in sub))
+
 #-------------------------Streamlit UI-------------------------
 
 st.set_page_config(page_title="🎬 Genre Movie Recommender", layout="centered")
@@ -67,7 +81,7 @@ st.title("🎥 Genre-Based Movie Recommender")
 st.markdown("Get content-based movie recommendations from a selected genre.")
 
 # Genre selection
-available_genres = sorted(set(g for sub in movies_df['genres'].dropna().str.split(',') for g in sub))
+available_genres = get_available_genres()
 selected_genre = st.selectbox("Select a genre", available_genres)
 
 # Movie selection
@@ -98,7 +112,7 @@ top_n = st.slider("Number of recommendations", 3, 15, 5)
 
 # Recommend button
 if st.button("Recommend") and selected_movie:
-    recommendations = recommend_by_genre(selected_movie, selected_genre, top_n)
+    recommendations = cached_recommendations(selected_movie, selected_genre, top_n)
 
     if recommendations.empty:
         st.warning("No recommendations found.")
