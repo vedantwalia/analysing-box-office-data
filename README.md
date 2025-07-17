@@ -1,19 +1,12 @@
-# analysing-box-office-data
+# 🎬 Analysing Box Office Data
 
----
-
-## 🌐 Live App
+This project explores box office movie data to identify trends, patterns, and insights using Python and machine learning techniques. It aims to recommend movies based on content similarity and key metrics like popularity, genres, and ratings.
 
 You can try out the project here:  
 🔗 [Live Streamlit App](https://vedantwalia-analysing-box-office-data-app-qm6txi.streamlit.app)
 
 ---
 
-# 🎬 Analysing Box Office Data
-
-This project explores box office movie data to identify trends, patterns, and insights using Python and machine learning techniques. It aims to recommend movies based on content similarity and key metrics like popularity, genres, and ratings.
-
----
 
 ## 📊 Features
 
